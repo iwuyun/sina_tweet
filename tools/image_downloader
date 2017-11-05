@@ -1,0 +1,53 @@
+# _*_ coding: utf-8 _*_
+import os
+import sys
+
+import json
+import urllib3
+
+http_pool = urllib3.PoolManager()
+
+project_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(project_dir)
+from titan_spider.settings import DATA_DIR, STAR_MAP
+
+
+def download_image(pic_url, star_name):
+    star_image_dir = os.path.join(DATA_DIR, star_name)
+    if not os.path.isdir(star_image_dir):
+        os.mkdir(star_image_dir)
+    pos = pic_url.rfind('/')
+    assert pos != -1
+    pic_filename = pic_url[pos + 1:]
+    pic_path = os.path.join(star_image_dir, pic_filename)
+    with open(pic_path, 'wb') as dest:
+        try:
+            dest.write(http_pool.request('GET', pic_url).data)
+        except:
+            print 'Failed downloading image: {}'.format(pic_url)
+
+
+with open(STAR_MAP) as src:
+    for line in src.readlines():
+        star_name = line.strip().split('\t')[0]
+        print 'Porcessing', star_name
+        filename = '{}.json'.format(star_name)
+        star_data_path = os.path.join(DATA_DIR, filename)
+        assert os.path.isfile(star_data_path)
+        with open(star_data_path) as data_src:
+            star_data = data_src.read()
+        star_data = json.loads(star_data)
+        assert 'cards' in star_data
+        cards = star_data['cards']
+        assert len(cards) > 0
+        for card in cards:
+            if 'mblog' in card:
+                mblog = card['mblog']
+                if 'pics' in mblog:
+                    pics = mblog['pics']
+                    for pic in pics:
+                        assert 'large' in pic
+                        large_pic_wrapper = pic['large']
+                        assert 'url' in large_pic_wrapper
+                        pic_url = large_pic_wrapper['url'].encode('utf8')
+                        download_image(pic_url, star_name)
